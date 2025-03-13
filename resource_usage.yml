@@ -1,0 +1,105 @@
+---
+- name: Fetch AWS Resources and Upload to S3
+  hosts: localhost
+  gather_facts: no
+  vars:
+    s3_bucket: "your-s3-bucket name"
+    output_file: "/tmp/aws-resources-{{ lookup('pipe', 'date +%F-%H-%M-%S') }}.txt"
+  tasks:
+    - name: Ensure AWS CLI is installed
+      command: which aws
+      register: aws_check
+      failed_when: aws_check.rc != 0
+      changed_when: false
+
+    - name: Ensure AWS credentials are configured
+      stat:
+        path: "~/.aws/credentials"
+      register: aws_credentials
+
+    - name: Fail if AWS credentials are missing
+      fail:
+        msg: "AWS credentials/config not found! Run 'aws configure'."
+      when: not aws_credentials.stat.exists
+
+    - name: Fetch AWS EC2 Instances
+      command: >
+        aws ec2 describe-instances
+        --query 'Reservations[*].Instances[*].[InstanceId,InstanceType,State.Name,PublicIpAddress,PrivateIpAddress]'
+        --output table
+      register: ec2_instances
+
+    - name: Fetch AWS S3 Buckets
+      command: >
+        aws s3api list-buckets
+        --query 'Buckets[*].[Name,CreationDate]'
+        --output table
+      register: s3_buckets
+
+    - name: Fetch AWS RDS Instances
+      command: >
+        aws rds describe-db-instances
+        --query 'DBInstances[*].[DBInstanceIdentifier,DBInstanceClass,Engine,DBInstanceStatus,Endpoint.Address]'
+        --output table
+      register: rds_instances
+
+    - name: Fetch AWS IAM Users
+      command: >
+        aws iam list-users
+        --query 'Users[*].[UserName,UserId,Arn,CreateDate]'
+        --output table
+      register: iam_users
+
+    - name: Fetch AWS Lambda Functions
+      command: >
+        aws lambda list-functions
+        --query 'Functions[*].[FunctionName,Runtime,Handler]'
+        --output table
+      register: lambda_functions
+
+    - name: Fetch AWS CloudFormation Stacks
+      command: >
+        aws cloudformation list-stacks
+        --query 'StackSummaries[*].[StackName,StackStatus]'
+        --output table
+      register: cloudformation_stacks
+
+    - name: Fetch AWS Auto Scaling Groups
+      command: >
+        aws autoscaling describe-auto-scaling-groups
+        --query 'AutoScalingGroups[*].[AutoScalingGroupName,MinSize,MaxSize,DesiredCapacity]'
+        --output table
+      register: auto_scaling_groups
+
+    - name: Create Output File
+      copy:
+        content: |
+          == AWS EC2 Instances ==
+          {{ ec2_instances.stdout }}
+
+          == AWS S3 Buckets ==
+          {{ s3_buckets.stdout }}
+
+          == AWS RDS Instances ==
+          {{ rds_instances.stdout }}
+
+          == AWS IAM Users ==
+          {{ iam_users.stdout }}
+
+          == AWS Lambda Functions ==
+          {{ lambda_functions.stdout }}
+
+          == AWS CloudFormation Stacks ==
+          {{ cloudformation_stacks.stdout }}
+
+          == AWS Auto Scaling Groups ==
+          {{ auto_scaling_groups.stdout }}
+        dest: "{{ output_file }}"
+
+    - name: Upload Output File to S3
+      command: "aws s3 cp {{ output_file }} s3://{{ s3_bucket }}/"
+      register: s3_upload
+
+    - name: Show S3 Upload Result
+      debug:
+        msg: "Upload complete! File available at s3://{{ s3_bucket }}/{{ output_file | basename }}"
