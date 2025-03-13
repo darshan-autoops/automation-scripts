@@ -48,4 +48,40 @@ aws ec2 describe-instances \
 echo -e "\n== S3 Buckets ==" | tee -a $OUTPUT_FILE
 aws s3api list-buckets \
     --query 'Buckets[*].[Name,CreationDate]' \
-    --output table |
+    --output table | tee -a $OUTPUT_FILE
+
+# Get RDS Instances
+echo -e "\n== RDS Instances ==" | tee -a $OUTPUT_FILE
+aws rds describe-db-instances \
+    --query 'DBInstances[*].[DBInstanceIdentifier,DBInstanceClass,Engine,DBInstanceStatus,Endpoint.Address]' \
+    --output table | tee -a $OUTPUT_FILE
+
+# Get IAM Users
+echo -e "\n== IAM Users ==" | tee -a $OUTPUT_FILE
+aws iam list-users \
+    --query 'Users[*].[UserName,UserId,Arn,CreateDate]' \
+    --output table | tee -a $OUTPUT_FILE
+
+# Get Lambda Functions
+echo -e "\n== Lambda Functions ==" | tee -a $OUTPUT_FILE
+aws lambda list-functions \
+    --query 'Functions[*].[FunctionName,Runtime,Handler]' \
+    --output table | tee -a $OUTPUT_FILE
+
+# Get CloudFormation Stacks
+echo -e "\n== CloudFormation Stacks ==" | tee -a $OUTPUT_FILE
+aws cloudformation list-stacks \
+    --query 'StackSummaries[*].[StackName,StackStatus]' \
+    --output table | tee -a $OUTPUT_FILE
+
+# Get Auto Scaling Groups
+echo -e "\n== Auto Scaling Groups ==" | tee -a $OUTPUT_FILE
+aws autoscaling describe-auto-scaling-groups \
+    --query 'AutoScalingGroups[*].[AutoScalingGroupName, MinSize, MaxSize, DesiredCapacity]' \
+    --output table | tee -a $OUTPUT_FILE
+
+# Upload the output file to S3
+echo "Uploading to S3: $S3_BUCKET..."
+aws s3 cp $OUTPUT_FILE s3://$S3_BUCKET/
+
+echo "Upload complete! File available at s3://$S3_BUCKET/$OUTPUT_FILE"
